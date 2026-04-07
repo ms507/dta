@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="10">
+  <title>Trading Bot Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Trading Bot Dashboard</h1>
+    <nav>
+      <a class="btn" href="{{ url_for('settings') }}">Einstellungen</a>
+      <a class="btn" href="{{ url_for('dashboard') }}">Aktualisieren</a>
+    </nav>
+  </header>
+
+  {% if snapshot.error %}
+  <section class="card error">
+    <h2>Verbindungsfehler</h2>
+    <p>{{ snapshot.error }}</p>
+  </section>
+  {% endif %}
+
+  {% if message %}
+  <section class="card ok">
+    <p>{{ message }}</p>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Bot Status</h2>
+    <p>
+      {% if bot.running %}
+        <span class="pos">Laufend</span> (PID {{ bot.pid }})
+      {% else %}
+        <span class="neg">Gestoppt</span>
+      {% endif %}
+    </p>
+    <div class="inline-actions">
+      <form method="post" action="{{ url_for('bot_start') }}">
+        <button class="btn primary" type="submit">Bot starten</button>
+      </form>
+      <form method="post" action="{{ url_for('bot_stop') }}">
+        <button class="btn" type="submit">Bot stoppen</button>
+      </form>
+    </div>
+    <small>Bot-Log: bot_stdout.log</small>
+  </section>
+
+  <section class="card">
+    <h2>Neueste Bot-Aktivitäten</h2>
+    {% if activities %}
+      <table class="activity-table">
+        <thead>
+          <tr>
+            <th>Zeit</th>
+            <th>Aktion</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for activity in activities %}
+          <tr class="activity-row action-{{ activity.action }}">
+            <td class="time">{{ activity.time }}</td>
+            <td class="action">{{ activity.action }}</td>
+            <td class="message">{{ activity.message[:120] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>Noch keine Aktivitaeten erkannt. Nach dem naechsten Bot-Zyklus erscheinen hier BUY/SELL/HOLD-Eintraege.</p>
+    {% endif %}
+  </section>
+
+  <section class="grid">
+    <article class="card metric">
+      <h2>Gesamtwert</h2>
+      <p class="value">{{ '%.2f'|format(snapshot.total_usdt) }} USDT</p>
+      <small>In USDT bewertet</small>
+    </article>
+
+    <article class="card metric">
+      <h2>Freies Guthaben ({{ snapshot.quote_asset }})</h2>
+      <p class="value">{{ '%.8f'|format(snapshot.quote_free) }}</p>
+      <small>Locked: {{ '%.8f'|format(snapshot.quote_locked) }}</small>
+    </article>
+
+    <article class="card metric">
+      <h2>Tages-Gewinn/Verlust</h2>
+      <p class="value {% if snapshot.daily_pnl_abs >= 0 %}pos{% else %}neg{% endif %}">
+        {{ '%+.2f'|format(snapshot.daily_pnl_abs) }} USDT
+      </p>
+      <small class="{% if snapshot.daily_pnl_pct >= 0 %}pos{% else %}neg{% endif %}">
+        {{ '%+.2f'|format(snapshot.daily_pnl_pct) }}%
+      </small>
+    </article>
+  </section>
+
+  <section class="card chart-card">
+    <h2>Portfolio Entwicklung (heute)</h2>
+    <canvas id="portfolioChart" height="180"></canvas>
+    <div id="chartTooltip" class="chart-tooltip"></div>
+    <small>
+      Punkte: {{ snapshot.history_values|length }}
+      {% if snapshot.history_values %}
+        | Min: {{ '%.2f'|format(snapshot.history_values|min) }} USDT
+        | Max: {{ '%.2f'|format(snapshot.history_values|max) }} USDT
+      {% endif %}
+    </small>
+  </section>
+
+  <section class="card">
+    <h2>Investierte Assets</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Asset</th>
+          <th>Free</th>
+          <th>Locked</th>
+          <th>Preis (USDT)</th>
+          <th>Wert (USDT)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in snapshot.assets %}
+        <tr>
+          <td>{{ row.asset }}</td>
+          <td>{{ '%.8f'|format(row.free) }}</td>
+          <td>{{ '%.8f'|format(row.locked) }}</td>
+          <td>{% if row.price_usdt is not none %}{{ '%.8f'|format(row.price_usdt) }}{% else %}-{% endif %}</td>
+          <td>{% if row.value_usdt is not none %}{{ '%.2f'|format(row.value_usdt) }}{% else %}-{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <script id="portfolioChartData" type="application/json">{{ {"labels": snapshot.history_labels, "values": snapshot.history_values}|tojson }}</script>
+  <script>
+    (function () {
+      const dataNode = document.getElementById("portfolioChartData");
+      if (!dataNode) {
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(dataNode.textContent || "{}");
+      } catch (_err) {
+        return;
+      }
+
+      const labels = Array.isArray(parsed.labels) ? parsed.labels : [];
+      const values = Array.isArray(parsed.values) ? parsed.values : [];
+      const canvas = document.getElementById("portfolioChart");
+      if (!canvas || values.length < 2) {
+        return;
+      }
+
+      const tooltip = document.getElementById("chartTooltip");
+      let hoveredIndex = -1;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(320, Math.floor(rect.width));
+      const height = Math.max(180, Math.floor(rect.height));
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, width, height);
+
+      const pad = { top: 20, right: 12, bottom: 30, left: 54 };
+      const plotW = width - pad.left - pad.right;
+      const plotH = height - pad.top - pad.bottom;
+
+      const minV = Math.min(...values);
+      const maxV = Math.max(...values);
+      const span = Math.max(1e-9, maxV - minV);
+
+      const x = (i) => pad.left + (i / (values.length - 1)) * plotW;
+      const y = (v) => pad.top + (1 - (v - minV) / span) * plotH;
+
+      // Draw Y-axis labels (min, mid, max)
+      ctx.fillStyle = "#64748b";
+      ctx.font = "11px Segoe UI, sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(maxV.toFixed(2), pad.left - 6, pad.top);
+      const midV = (minV + maxV) / 2;
+      ctx.fillText(midV.toFixed(2), pad.left - 6, pad.top + plotH / 2);
+      ctx.fillText(minV.toFixed(2), pad.left - 6, pad.top + plotH);
+
+      // Draw Y-axis line
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.left - 2, pad.top);
+      ctx.lineTo(pad.left - 2, pad.top + plotH);
+      ctx.stroke();
+
+      // Draw light grid lines
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.3;
+      for (let i = 0; i <= 4; i++) {
+        const gridY = pad.top + (i / 4) * plotH;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, gridY);
+        ctx.lineTo(pad.left + plotW, gridY);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1.0;
+
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, pad.top + plotH);
+      ctx.lineTo(pad.left + plotW, pad.top + plotH);
+      ctx.stroke();
+
+      // Draw x-axis label (last time)
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "11px Segoe UI, sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "top";
+      const lastLabel = labels[labels.length - 1] || "";
+      ctx.fillText(lastLabel, pad.left + plotW, pad.top + plotH + 6);
+
+      const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+      gradient.addColorStop(0, "rgba(34,197,94,0.35)");
+      gradient.addColorStop(1, "rgba(34,197,94,0.02)");
+
+      ctx.beginPath();
+      ctx.moveTo(x(0), y(values[0]));
+      for (let i = 1; i < values.length; i += 1) {
+        ctx.lineTo(x(i), y(values[i]));
+      }
+      ctx.lineTo(pad.left + plotW, pad.top + plotH);
+      ctx.lineTo(pad.left, pad.top + plotH);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(x(0), y(values[0]));
+      for (let i = 1; i < values.length; i += 1) {
+        ctx.lineTo(x(i), y(values[i]));
+      }
+      ctx.strokeStyle = values[values.length - 1] >= values[0] ? "#22c55e" : "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw data point circles
+      const minIdx = values.indexOf(minV);
+      const maxIdx = values.indexOf(maxV);
+      ctx.fillStyle = "#fbbf24";
+      ctx.beginPath();
+      if (minIdx >= 0) {
+        ctx.arc(x(minIdx), y(minV), 4, 0, 2 * Math.PI);
+      }
+      ctx.fill();
+      ctx.fillStyle = "#22c55e";
+      ctx.beginPath();
+      if (maxIdx >= 0) {
+        ctx.arc(x(maxIdx), y(maxV), 4, 0, 2 * Math.PI);
+      }
+      ctx.fill();
+
+      // Mouse hover detection
+      canvas.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) / dpr;
+        const my = (e.clientY - rect.top) / dpr;
+
+        hoveredIndex = -1;
+        let minDist = 12;
+        for (let i = 0; i < values.length; i += 1) {
+          const px = x(i);
+          const py = y(values[i]);
+          const dist = Math.hypot(mx - px, my - py);
+          if (dist < minDist) {
+            minDist = dist;
+            hoveredIndex = i;
+          }
+        }
+
+        if (hoveredIndex >= 0) {
+          tooltip.textContent = labels[hoveredIndex] + " → " + values[hoveredIndex].toFixed(2) + " USDT";
+          tooltip.style.left = (rect.left + x(hoveredIndex) * dpr) + "px";
+          tooltip.style.top = (rect.top + y(values[hoveredIndex]) * dpr - 28) + "px";
+          tooltip.style.display = "block";
+          canvas.style.cursor = "pointer";
+        } else {
+          tooltip.style.display = "none";
+          canvas.style.cursor = "default";
+        }
+      });
+
+      canvas.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+        canvas.style.cursor = "default";
+      });
+    })();
+  </script>
+</body>
+</html>

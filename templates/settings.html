@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trading Bot Einstellungen</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Einstellungen (.env)</h1>
+    <nav>
+      <a class="btn" href="{{ url_for('dashboard') }}">Dashboard</a>
+    </nav>
+  </header>
+
+  {% if message %}
+  <section class="card ok">
+    <p>{{ message }}</p>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <form method="post" class="form-grid">
+      {% for field in fields %}
+      <label>{{ field.key }}</label>
+      <input
+        name="{{ field.key }}"
+        type="{% if field.is_sensitive %}password{% else %}text{% endif %}"
+        value="{{ field.value }}"
+        placeholder="{% if field.is_sensitive and field.is_set %}bereits gesetzt (leer lassen = unveraendert){% endif %}"
+        autocomplete="off"
+      >
+      {% endfor %}
+      <button class="btn primary" type="submit">Speichern</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <p>Hinweis: Nach dem Speichern den laufenden Bot neu starten, damit Werte neu geladen werden.</p>
+  </section>
+</body>
+</html>
