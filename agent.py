@@ -32,6 +32,9 @@ class TradingAgent:
             config.ca_bundle or None,
             config.private_key_path or None,
             config.private_key_pass or None,
+            config.binance_request_timeout,
+            config.binance_max_retries,
+            config.binance_retry_backoff_sec,
         )
         self.risk = RiskManager(config.risk)
         self.portfolio = Portfolio()

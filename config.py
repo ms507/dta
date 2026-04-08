@@ -27,6 +27,9 @@ class Config:
     private_key_pass: str = field(default_factory=lambda: os.getenv("BINANCE_PRIVATE_KEY_PASS", "").strip())
     testnet: bool = field(default_factory=lambda: os.getenv("BINANCE_TESTNET", "true").lower() == "true")
     ca_bundle: str = field(default_factory=lambda: os.getenv("BINANCE_CA_BUNDLE", "").strip())
+    binance_request_timeout: int = field(default_factory=lambda: int(os.getenv("BINANCE_REQUEST_TIMEOUT", "20")))
+    binance_max_retries: int = field(default_factory=lambda: int(os.getenv("BINANCE_MAX_RETRIES", "3")))
+    binance_retry_backoff_sec: float = field(default_factory=lambda: float(os.getenv("BINANCE_RETRY_BACKOFF_SEC", "1.0")))
 
     symbols: List[str] = field(
         default_factory=lambda: os.getenv("TRADING_SYMBOLS", "BTCUSDT,ETHUSDT").split(",")
@@ -56,3 +59,9 @@ class Config:
             raise ValueError("MAX_POSITION_PCT > 10% is too high. Please lower the risk.")
         if self.risk.max_daily_loss_pct > 0.20:
             raise ValueError("MAX_DAILY_LOSS_PCT > 20% is too high. Please lower the risk.")
+        if self.binance_request_timeout < 1:
+            raise ValueError("BINANCE_REQUEST_TIMEOUT must be >= 1 second.")
+        if self.binance_max_retries < 0:
+            raise ValueError("BINANCE_MAX_RETRIES must be >= 0.")
+        if self.binance_retry_backoff_sec < 0:
+            raise ValueError("BINANCE_RETRY_BACKOFF_SEC must be >= 0.")
