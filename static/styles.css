@@ -118,6 +118,8 @@ th, td {
 .activity-row.action-SELL .action { color: #ef4444; }
 .activity-row.action-AI .action   { color: #818cf8; }
 .activity-row.action-ERROR .action{ color: #f97316; }
+.activity-row.action-BUY_BLOCKED .action { color: #f59e0b; }
+.activity-row.action-SELL_BLOCKED .action { color: #f59e0b; }
 
 .activity-row .message {
   color: #cbd5e1;

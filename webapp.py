@@ -85,6 +85,10 @@ def _get_recent_bot_activity(limit: int = 10) -> list[dict[str, str]]:
                     activities.append({"time": ts, "action": "BUY", "message": msg})
                 elif "order executed:" in line_lower and " sell " in line_lower:
                     activities.append({"time": ts, "action": "SELL", "message": msg})
+                elif "buy blocked" in line_lower or "buy signal not executed" in line_lower:
+                    activities.append({"time": ts, "action": "BUY_BLOCKED", "message": msg})
+                elif "sell blocked" in line_lower or "sell signal not executed" in line_lower:
+                    activities.append({"time": ts, "action": "SELL_BLOCKED", "message": msg})
                 elif " signal=hold" in line_lower or " no action" in line_lower:
                     activities.append({"time": ts, "action": "HOLD", "message": msg})
                 elif "buy=" in line_lower and "sell=" in line_lower and "hold=" in line_lower:
