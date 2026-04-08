@@ -34,11 +34,13 @@ class RiskManager:
     # Position sizing
     # ------------------------------------------------------------------
 
-    def calculate_quantity(self, balance: float, price: float) -> float:
-        """Return how many units to buy, limited to max_position_pct of balance."""
+    def calculate_quantity(self, available_balance: float, price: float, equity: float | None = None) -> float:
+        """Return how many units to buy, limited to max_position_pct of equity."""
         if price <= 0:
             return 0.0
-        usdt_to_use = balance * self.config.max_position_pct
+        # Use total equity if provided, otherwise fall back to available balance
+        sizing_basis = equity if equity and equity > 0 else available_balance
+        usdt_to_use = sizing_basis * self.config.max_position_pct
         return usdt_to_use / price
 
     # ------------------------------------------------------------------

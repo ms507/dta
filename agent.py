@@ -271,7 +271,7 @@ class TradingAgent:
                 logger.warning(f"No valid price for {symbol}, skipping BUY")
                 return
 
-            target_quantity = self.risk.calculate_quantity(quote_balance, price)
+            target_quantity = self.risk.calculate_quantity(quote_balance, price, equity)
             quantity_to_buy = target_quantity
 
             if has_position:
