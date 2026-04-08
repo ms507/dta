@@ -298,18 +298,18 @@ class TradingAgent:
                 return
 
             if not has_position and self.portfolio.count() >= self.config.risk.max_open_positions:
-                logger.warning(
-                    f"Max open positions ({self.config.risk.max_open_positions}) reached — "
-                    f"skipping {symbol}"
+                logger.info(
+                    f"{symbol} | BUY blocked: max open positions reached "
+                    f"({self.portfolio.count()}/{self.config.risk.max_open_positions})"
                 )
                 return
             if self.risk.is_daily_loss_exceeded(equity):
-                logger.warning("Daily loss limit reached — no new trades today")
+                logger.info(f"{symbol} | BUY blocked: daily loss limit reached")
                 return
 
             price = self.broker.get_price(symbol)
             if price <= 0:
-                logger.warning(f"No valid price for {symbol}, skipping BUY")
+                logger.info(f"{symbol} | BUY blocked: no valid price")
                 return
 
             target_quantity = self.risk.calculate_quantity(quote_balance, price, equity)
@@ -323,7 +323,7 @@ class TradingAgent:
                 quantity_to_buy = max(0.0, target_quantity - current_position.quantity)
                 if quantity_to_buy <= 0:
                     logger.info(
-                        f"{symbol} | BUY signal but target already reached "
+                        f"{symbol} | BUY blocked: target quantity already held "
                         f"(target={target_quantity:.8f}, current={current_position.quantity:.8f})"
                     )
                     return
@@ -358,7 +358,7 @@ class TradingAgent:
             hold_age = self._position_age_seconds(symbol)
             if hold_age < self._min_hold_sec:
                 logger.info(
-                    f"{symbol} | SELL blocked by min hold time "
+                    f"{symbol} | SELL blocked: minimum hold time not reached "
                     f"({hold_age:.0f}s < {self._min_hold_sec}s)"
                 )
                 return
@@ -366,7 +366,7 @@ class TradingAgent:
             pnl_pct = (current_price - pos.entry_price) / pos.entry_price if pos.entry_price > 0 else 0.0
             if pnl_pct < self._min_signal_exit_pnl_pct:
                 logger.info(
-                    f"{symbol} | SELL blocked by min signal PnL "
+                    f"{symbol} | SELL blocked: minimum PnL not reached "
                     f"({pnl_pct:.3%} < {self._min_signal_exit_pnl_pct:.3%})"
                 )
                 return
