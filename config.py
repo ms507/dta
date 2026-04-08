@@ -38,6 +38,11 @@ class Config:
     lookback_candles: int = field(default_factory=lambda: int(os.getenv("LOOKBACK_CANDLES", "100")))
     min_signal_consensus: int = field(default_factory=lambda: int(os.getenv("MIN_SIGNAL_CONSENSUS", "2")))
     check_interval: int = field(default_factory=lambda: int(os.getenv("CHECK_INTERVAL", "60")))
+    trading_cooldown_sec: int = field(default_factory=lambda: int(os.getenv("TRADING_COOLDOWN_SEC", "900")))
+    min_hold_sec: int = field(default_factory=lambda: int(os.getenv("MIN_HOLD_SEC", "600")))
+    min_signal_exit_pnl_pct: float = field(default_factory=lambda: float(os.getenv("MIN_SIGNAL_EXIT_PNL_PCT", "0.0035")))
+    min_ai_buy_score: float = field(default_factory=lambda: float(os.getenv("MIN_AI_BUY_SCORE", "0.08")))
+    max_ai_sell_score: float = field(default_factory=lambda: float(os.getenv("MAX_AI_SELL_SCORE", "-0.08")))
 
     risk: RiskConfig = field(default_factory=RiskConfig)
 
@@ -65,3 +70,13 @@ class Config:
             raise ValueError("BINANCE_MAX_RETRIES must be >= 0.")
         if self.binance_retry_backoff_sec < 0:
             raise ValueError("BINANCE_RETRY_BACKOFF_SEC must be >= 0.")
+        if self.trading_cooldown_sec < 0:
+            raise ValueError("TRADING_COOLDOWN_SEC must be >= 0.")
+        if self.min_hold_sec < 0:
+            raise ValueError("MIN_HOLD_SEC must be >= 0.")
+        if self.min_signal_exit_pnl_pct < 0:
+            raise ValueError("MIN_SIGNAL_EXIT_PNL_PCT must be >= 0.")
+        if self.min_ai_buy_score < -1.0 or self.min_ai_buy_score > 1.0:
+            raise ValueError("MIN_AI_BUY_SCORE must be between -1.0 and 1.0.")
+        if self.max_ai_sell_score < -1.0 or self.max_ai_sell_score > 1.0:
+            raise ValueError("MAX_AI_SELL_SCORE must be between -1.0 and 1.0.")

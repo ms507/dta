@@ -51,8 +51,34 @@ class TradingAgent:
         self._last_reset_date: date | None = None
         self._quote_asset: str = self._detect_quote_asset()
         self._last_ai_scores: dict[str, float] = {}
-        self._min_ai_buy_score = 0.05
-        self._max_ai_sell_score = -0.05
+        self._min_ai_buy_score = self.config.min_ai_buy_score
+        self._max_ai_sell_score = self.config.max_ai_sell_score
+        self._trading_cooldown_sec = max(0, int(self.config.trading_cooldown_sec))
+        self._min_hold_sec = max(0, int(self.config.min_hold_sec))
+        self._min_signal_exit_pnl_pct = max(0.0, float(self.config.min_signal_exit_pnl_pct))
+        self._position_opened_at: dict[str, float] = {}
+        self._last_exit_at: dict[str, float] = {}
+
+    def _record_position_opened(self, symbol: str) -> None:
+        self._position_opened_at[symbol] = time.time()
+
+    def _record_position_closed(self, symbol: str) -> None:
+        self._last_exit_at[symbol] = time.time()
+        self._position_opened_at.pop(symbol, None)
+
+    def _position_age_seconds(self, symbol: str) -> float:
+        opened_at = self._position_opened_at.get(symbol)
+        if opened_at is None:
+            return 0.0
+        return max(0.0, time.time() - opened_at)
+
+    def _is_reentry_cooldown_active(self, symbol: str) -> bool:
+        if self._trading_cooldown_sec <= 0:
+            return False
+        last_exit = self._last_exit_at.get(symbol)
+        if last_exit is None:
+            return False
+        return (time.time() - last_exit) < self._trading_cooldown_sec
 
     def _detect_quote_asset(self) -> str:
         """Infer quote currency from the first configured symbol."""
@@ -189,6 +215,7 @@ class TradingAgent:
             if quantity <= 0:
                 if existing is not None:
                     self.portfolio.close(symbol)
+                    self._record_position_closed(symbol)
                     logger.info(f"Removed {symbol} from portfolio because no exchange balance remains")
                 continue
 
@@ -210,6 +237,7 @@ class TradingAgent:
 
             if existing is None:
                 self.portfolio.open(synced_position)
+                self._record_position_opened(symbol)
                 logger.info(
                     f"Imported existing exchange holding for {symbol}: qty={quantity:.6f} "
                     f"entry={entry_price:.4f}"
@@ -220,6 +248,7 @@ class TradingAgent:
             entry_changed = abs(existing.entry_price - entry_price) > 1e-12
             if quantity_changed or entry_changed:
                 self.portfolio.open(synced_position)
+                self._position_opened_at.setdefault(symbol, time.time())
                 logger.info(
                     f"Synchronized exchange holding for {symbol}: qty={quantity:.6f} "
                     f"entry={entry_price:.4f}"
@@ -237,6 +266,7 @@ class TradingAgent:
                 order = self.broker.place_market_order(symbol, "SELL", pos.quantity)
                 if order.status in ("FILLED", "NEW"):
                     self.portfolio.close(symbol)
+                    self._record_position_closed(symbol)
                     logger.info(f"Exited {symbol} — reason: {reason}")
 
     def _handle_signal(self, symbol: str, signal: Signal) -> None:
@@ -246,6 +276,14 @@ class TradingAgent:
         if signal == Signal.BUY:
             has_position = self.portfolio.has(symbol)
             ai_score = self._last_ai_scores.get(symbol, 0.0)
+
+            if not has_position and self._is_reentry_cooldown_active(symbol):
+                elapsed = time.time() - self._last_exit_at.get(symbol, 0.0)
+                logger.info(
+                    f"{symbol} | BUY blocked by cooldown "
+                    f"({elapsed:.0f}s < {self._trading_cooldown_sec}s)"
+                )
+                return
 
             if ai_score < self._min_ai_buy_score:
                 logger.info(
@@ -302,14 +340,41 @@ class TradingAgent:
                     take_profit=self.risk.take_profit_price(price, "LONG"),
                     side="LONG",
                 ))
+                self._record_position_opened(symbol)
             else:
                 logger.warning(f"{symbol} | BUY signal not executed (order status={order.status})")
 
         elif signal == Signal.SELL and self.portfolio.has(symbol):
             pos = self.portfolio.get(symbol)
+            if pos is None:
+                logger.warning(f"{symbol} | SELL signal but position is missing")
+                return
+
+            current_price = self.broker.get_price(symbol)
+            if current_price <= 0:
+                logger.warning(f"{symbol} | SELL skipped due to invalid current price")
+                return
+
+            hold_age = self._position_age_seconds(symbol)
+            if hold_age < self._min_hold_sec:
+                logger.info(
+                    f"{symbol} | SELL blocked by min hold time "
+                    f"({hold_age:.0f}s < {self._min_hold_sec}s)"
+                )
+                return
+
+            pnl_pct = (current_price - pos.entry_price) / pos.entry_price if pos.entry_price > 0 else 0.0
+            if pnl_pct < self._min_signal_exit_pnl_pct:
+                logger.info(
+                    f"{symbol} | SELL blocked by min signal PnL "
+                    f"({pnl_pct:.3%} < {self._min_signal_exit_pnl_pct:.3%})"
+                )
+                return
+
             order = self.broker.place_market_order(symbol, "SELL", pos.quantity)
             if order.status in ("FILLED", "NEW"):
                 self.portfolio.close(symbol)
+                self._record_position_closed(symbol)
             else:
                 logger.warning(f"{symbol} | SELL signal not executed (order status={order.status})")
         elif signal == Signal.SELL:
