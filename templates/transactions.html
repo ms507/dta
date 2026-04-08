@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Letzte Transaktionen</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Letzte Transaktionen</h1>
+    <nav>
+      <a class="btn" href="{{ url_for('dashboard') }}">Dashboard</a>
+      <a class="btn" href="{{ url_for('settings') }}">Einstellungen</a>
+    </nav>
+  </header>
+
+  {% if error %}
+  <section class="card error">
+    <h2>Fehler beim Laden</h2>
+    <p>{{ error }}</p>
+  </section>
+  {% endif %}
+
+  {% if message %}
+  <section class="card ok">
+    <p>{{ message }}</p>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Abruf</h2>
+    <p>Symbole: {{ symbols|join(', ') if symbols else 'keine' }}</p>
+    <form method="post" action="{{ url_for('transactions') }}">
+      <button class="btn primary" type="submit">Transaktionen laden</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Ergebnis</h2>
+    {% if trades %}
+    <table class="tx-table">
+      <thead>
+        <tr>
+          <th>Zeit</th>
+          <th>Symbol</th>
+          <th>Seite</th>
+          <th>Menge</th>
+          <th>Preis</th>
+          <th>Quote</th>
+          <th>Gebuehr</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in trades %}
+        <tr class="tx-row side-{{ t.side }}">
+          <td>{{ t.time }}</td>
+          <td>{{ t.symbol }}</td>
+          <td class="side">{{ t.side }}</td>
+          <td>{{ t.qty }}</td>
+          <td>{{ t.price }}</td>
+          <td>{{ t.quote_qty }}</td>
+          <td>{{ t.commission }} {{ t.commission_asset }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>Noch keine Daten geladen. Klicke auf "Transaktionen laden".</p>
+    {% endif %}
+  </section>
+</body>
+</html>

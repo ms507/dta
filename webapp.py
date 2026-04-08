@@ -37,6 +37,9 @@ ALLOWED_ENV_KEYS = [
     "TAKE_PROFIT_PCT",
     "MAX_DAILY_LOSS_PCT",
     "MAX_OPEN_POSITIONS",
+    "BINANCE_REQUEST_TIMEOUT",
+    "BINANCE_MAX_RETRIES",
+    "BINANCE_RETRY_BACKOFF_SEC",
 ]
 SENSITIVE_KEYS = {
     "BINANCE_API_KEY",
@@ -191,6 +194,12 @@ def _create_client(env: dict[str, str]) -> Client:
             if local_candidate.exists():
                 request_params["verify"] = str(local_candidate)
 
+    timeout_raw = env.get("BINANCE_REQUEST_TIMEOUT", "20").strip()
+    try:
+        request_params["timeout"] = max(1, int(timeout_raw))
+    except ValueError:
+        request_params["timeout"] = 20
+
     kwargs: dict[str, Any] = {
         "api_key": env.get("BINANCE_API_KEY", "").strip(),
         "api_secret": (env.get("BINANCE_API_SECRET", "").strip() or None),
@@ -210,6 +219,36 @@ def _create_client(env: dict[str, str]) -> Client:
     if _bool_env(env.get("BINANCE_TESTNET", "true"), default=True):
         client.API_URL = "https://testnet.binance.vision/api"
     return client
+
+
+def _symbol_list_from_env(env: dict[str, str]) -> list[str]:
+    symbols_raw = env.get("TRADING_SYMBOLS", "")
+    symbols = [s.strip().upper() for s in symbols_raw.split(",") if s.strip()]
+    return symbols
+
+
+def _fetch_recent_trades(client: Client, symbols: list[str], limit: int = 10) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for symbol in symbols:
+        trades = client.get_my_trades(symbol=symbol, limit=limit)
+        for trade in trades:
+            ts_ms = int(trade.get("time", 0))
+            ts = datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M:%S") if ts_ms else ""
+            rows.append(
+                {
+                    "symbol": symbol,
+                    "time": ts,
+                    "side": "BUY" if trade.get("isBuyer") else "SELL",
+                    "qty": trade.get("qty", ""),
+                    "price": trade.get("price", ""),
+                    "quote_qty": trade.get("quoteQty", ""),
+                    "commission": trade.get("commission", ""),
+                    "commission_asset": trade.get("commissionAsset", ""),
+                }
+            )
+
+    rows.sort(key=lambda r: r.get("time", ""), reverse=True)
+    return rows
 
 
 def _get_price_usdt(client: Client, asset: str, cache: dict[str, float | None]) -> float | None:
@@ -415,6 +454,34 @@ def settings():
         )
 
     return render_template("settings.html", fields=fields, message=message)
+
+
+@app.route("/transactions", methods=["GET", "POST"])
+def transactions():
+    env = _env_values()
+    message = ""
+    error = ""
+    trades: list[dict[str, Any]] = []
+    symbols = _symbol_list_from_env(env)
+
+    if request.method == "POST":
+        if not symbols:
+            error = "Keine Symbole in TRADING_SYMBOLS konfiguriert."
+        else:
+            try:
+                client = _create_client(env)
+                trades = _fetch_recent_trades(client, symbols=symbols, limit=10)
+                message = f"{len(trades)} Transaktionen geladen ({len(symbols)} Symbole)."
+            except Exception as exc:
+                error = str(exc)
+
+    return render_template(
+        "transactions.html",
+        message=message,
+        error=error,
+        trades=trades,
+        symbols=symbols,
+    )
 
 
 if __name__ == "__main__":

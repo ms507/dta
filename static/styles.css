@@ -125,6 +125,23 @@ th, td {
   word-break: break-word;
 }
 
+.tx-table {
+  width: 100%;
+  font-size: 0.92rem;
+}
+
+.tx-row .side {
+  font-weight: 600;
+}
+
+.tx-row.side-BUY .side {
+  color: #22c55e;
+}
+
+.tx-row.side-SELL .side {
+  color: #ef4444;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr;
