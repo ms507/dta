@@ -48,8 +48,8 @@ class TradingAgent:
         self._last_reset_date: date | None = None
         self._quote_asset: str = self._detect_quote_asset()
         self._last_ai_scores: dict[str, float] = {}
-        self._min_ai_buy_score = 0.12
-        self._max_ai_sell_score = -0.02
+        self._min_ai_buy_score = 0.05
+        self._max_ai_sell_score = -0.05
 
     def _detect_quote_asset(self) -> str:
         """Infer quote currency from the first configured symbol."""
@@ -118,14 +118,16 @@ class TradingAgent:
         ema_fast = close.ewm(span=9, adjust=False).mean().iloc[-1]
         ema_slow = close.ewm(span=21, adjust=False).mean().iloc[-1]
         sma50 = close.rolling(50).mean().iloc[-1]
+        sma200 = close.rolling(200).mean().iloc[-1]
         price = close.iloc[-1]
 
         if pd.isna(ema_fast) or pd.isna(ema_slow) or pd.isna(sma50):
             return False, "trend_nan"
 
-        if price <= sma50:
-            return False, "price_below_sma50"
-        if ema_fast <= ema_slow:
+        # More lenient: allow trades when price is near SMA50 or above
+        if sma200 > 0 and price < sma200 * 0.95:
+            return False, "price_below_sma200"
+        if ema_fast <= ema_slow * 0.99:  # Allow small deviation
             return False, "ema9_below_ema21"
         return True, "ok"
 

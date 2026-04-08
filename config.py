@@ -11,11 +11,11 @@ load_dotenv()
 @dataclass
 class RiskConfig:
     """Risk management parameters loaded from environment variables."""
-    max_position_pct: float = float(os.getenv("MAX_POSITION_PCT", "0.02"))
-    stop_loss_pct: float = float(os.getenv("STOP_LOSS_PCT", "0.015"))
-    take_profit_pct: float = float(os.getenv("TAKE_PROFIT_PCT", "0.03"))
-    max_daily_loss_pct: float = float(os.getenv("MAX_DAILY_LOSS_PCT", "0.05"))
-    max_open_positions: int = int(os.getenv("MAX_OPEN_POSITIONS", "3"))
+    max_position_pct: float = float(os.getenv("MAX_POSITION_PCT", "0.08"))
+    stop_loss_pct: float = float(os.getenv("STOP_LOSS_PCT", "0.025"))
+    take_profit_pct: float = float(os.getenv("TAKE_PROFIT_PCT", "0.05"))
+    max_daily_loss_pct: float = float(os.getenv("MAX_DAILY_LOSS_PCT", "0.10"))
+    max_open_positions: int = int(os.getenv("MAX_OPEN_POSITIONS", "5"))
 
 
 @dataclass
