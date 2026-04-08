@@ -41,6 +41,18 @@ class RiskManager:
         # Use total equity if provided, otherwise fall back to available balance
         sizing_basis = equity if equity and equity > 0 else available_balance
         usdt_to_use = sizing_basis * self.config.max_position_pct
+
+        # Keep entries inside a practical quote-notional band to avoid tiny churn trades.
+        min_entry_quote = max(0.0, float(getattr(self.config, "min_entry_quote", 0.0)))
+        max_entry_quote = max(0.0, float(getattr(self.config, "max_entry_quote", 0.0)))
+        if min_entry_quote > 0:
+            usdt_to_use = max(usdt_to_use, min_entry_quote)
+        if max_entry_quote > 0:
+            usdt_to_use = min(usdt_to_use, max_entry_quote)
+
+        # Leave a little headroom for fees and price movement.
+        balance_cap = max(0.0, available_balance * 0.98)
+        usdt_to_use = min(usdt_to_use, balance_cap)
         return usdt_to_use / price
 
     # ------------------------------------------------------------------

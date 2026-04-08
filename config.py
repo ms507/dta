@@ -16,6 +16,8 @@ class RiskConfig:
     take_profit_pct: float = float(os.getenv("TAKE_PROFIT_PCT", "0.05"))
     max_daily_loss_pct: float = float(os.getenv("MAX_DAILY_LOSS_PCT", "0.10"))
     max_open_positions: int = int(os.getenv("MAX_OPEN_POSITIONS", "5"))
+    min_entry_quote: float = float(os.getenv("MIN_ENTRY_QUOTE", "10"))
+    max_entry_quote: float = float(os.getenv("MAX_ENTRY_QUOTE", "15"))
 
 
 @dataclass
@@ -64,6 +66,12 @@ class Config:
             raise ValueError("MAX_POSITION_PCT > 10% is too high. Please lower the risk.")
         if self.risk.max_daily_loss_pct > 0.20:
             raise ValueError("MAX_DAILY_LOSS_PCT > 20% is too high. Please lower the risk.")
+        if self.risk.min_entry_quote < 0:
+            raise ValueError("MIN_ENTRY_QUOTE must be >= 0.")
+        if self.risk.max_entry_quote < 0:
+            raise ValueError("MAX_ENTRY_QUOTE must be >= 0.")
+        if self.risk.max_entry_quote and self.risk.min_entry_quote > self.risk.max_entry_quote:
+            raise ValueError("MIN_ENTRY_QUOTE must be <= MAX_ENTRY_QUOTE.")
         if self.binance_request_timeout < 1:
             raise ValueError("BINANCE_REQUEST_TIMEOUT must be >= 1 second.")
         if self.binance_max_retries < 0:
