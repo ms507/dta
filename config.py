@@ -32,10 +32,16 @@ def _env_float(key: str, default: float) -> float:
         return default
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    raw = _env_str(key, "true" if default else "false").lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 @dataclass
 class RiskConfig:
     """Risk management parameters loaded from environment variables."""
     max_position_pct: float = _env_float("MAX_POSITION_PCT", 0.08)
+    use_full_balance: bool = _env_bool("USE_FULL_BALANCE", False)
     stop_loss_pct: float = _env_float("STOP_LOSS_PCT", 0.025)
     take_profit_pct: float = _env_float("TAKE_PROFIT_PCT", 0.05)
     max_daily_loss_pct: float = _env_float("MAX_DAILY_LOSS_PCT", 0.10)
@@ -86,8 +92,8 @@ class Config:
             raise ValueError(
                 f"BINANCE_PRIVATE_KEY_PATH does not exist: {self.private_key_path}"
             )
-        if self.risk.max_position_pct > 0.10:
-            raise ValueError("MAX_POSITION_PCT > 10% is too high. Please lower the risk.")
+        if self.risk.max_position_pct <= 0 or self.risk.max_position_pct > 1.0:
+            raise ValueError("MAX_POSITION_PCT must be > 0 and <= 1.0.")
         if self.risk.max_daily_loss_pct > 0.20:
             raise ValueError("MAX_DAILY_LOSS_PCT > 20% is too high. Please lower the risk.")
         if self.risk.min_entry_quote < 0:

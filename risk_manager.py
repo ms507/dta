@@ -9,6 +9,8 @@ class RiskManager:
     def __init__(self, config: RiskConfig) -> None:
         self.config = config
         self._daily_start_balance: float | None = None
+        if self.config.use_full_balance:
+            logger.warning("Full balance mode enabled: BUY orders will use 100% of available quote balance")
 
     # ------------------------------------------------------------------
     # Daily loss guard
@@ -35,9 +37,14 @@ class RiskManager:
     # ------------------------------------------------------------------
 
     def calculate_quantity(self, available_balance: float, price: float, equity: float | None = None) -> float:
-        """Return how many units to buy, limited to max_position_pct of equity."""
+        """Return how many units to buy based on risk configuration."""
         if price <= 0:
             return 0.0
+
+        if self.config.use_full_balance:
+            # Spend the full available quote balance on each BUY in this mode.
+            return max(0.0, available_balance) / price
+
         # Use total equity if provided, otherwise fall back to available balance
         sizing_basis = equity if equity and equity > 0 else available_balance
         usdt_to_use = sizing_basis * self.config.max_position_pct
