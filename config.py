@@ -26,6 +26,7 @@ def _env_int(key: str, default: int) -> int:
 
 def _env_float(key: str, default: float) -> float:
     raw = _env_str(key, str(default))
+    raw = raw.replace(",", ".")
     try:
         return float(raw)
     except ValueError:
