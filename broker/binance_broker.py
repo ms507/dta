@@ -388,16 +388,38 @@ class BinanceBroker(BaseBroker):
             result = self._call_with_retries(
                 "order_market", self.client.order_market, symbol=symbol, side=side, quantity=quantity_str
             )
+            status = str(result.get("status", "UNKNOWN"))
+            order_id = str(result.get("orderId")) if result.get("orderId") is not None else None
+
+            if status not in ("FILLED", "NEW"):
+                reject_reason = (
+                    result.get("rejectReason")
+                    or result.get("msg")
+                    or f"binance returned status={status} without explicit reason"
+                )
+                logger.warning(
+                    f"Order not accepted as executable: {side} {quantity} {symbol} | "
+                    f"order_id={order_id} status={status} reason={reject_reason}"
+                )
+                return Order(
+                    symbol=symbol,
+                    side=side,
+                    quantity=quantity,
+                    order_id=order_id,
+                    status=status,
+                    reject_reason=str(reject_reason),
+                )
+
             logger.info(
                 f"Order executed: {side} {quantity} {symbol} | "
-                f"order_id={result['orderId']} status={result['status']}"
+                f"order_id={order_id} status={status}"
             )
             return Order(
                 symbol=symbol,
                 side=side,
                 quantity=quantity,
-                order_id=str(result["orderId"]),
-                status=result["status"],
+                order_id=order_id,
+                status=status,
             )
         except (BinanceAPIException, ReadTimeoutError, RequestException, TimeoutError) as exc:
             logger.error(f"place_market_order({symbol}, {side}, {quantity}) failed: {exc}")
