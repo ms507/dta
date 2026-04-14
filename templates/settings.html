@@ -25,6 +25,13 @@
     <form method="post" class="form-grid">
       {% for field in fields %}
       <label>{{ field.key }}</label>
+      {% if field.is_bool %}
+      <input
+        name="{{ field.key }}"
+        type="checkbox"
+        {% if field.bool_checked %}checked{% endif %}
+      >
+      {% else %}
       <input
         name="{{ field.key }}"
         type="{% if field.is_sensitive %}password{% else %}text{% endif %}"
@@ -32,6 +39,7 @@
         placeholder="{% if field.is_sensitive and field.is_set %}bereits gesetzt (leer lassen = unveraendert){% endif %}"
         autocomplete="off"
       >
+      {% endif %}
       {% endfor %}
       <button class="btn primary" type="submit">Speichern</button>
     </form>

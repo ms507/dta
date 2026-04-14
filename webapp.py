@@ -38,6 +38,7 @@ ALLOWED_ENV_KEYS = [
     "MIN_AI_BUY_SCORE",
     "MAX_AI_SELL_SCORE",
     "MAX_POSITION_PCT",
+    "USE_FULL_BALANCE",
     "MIN_ENTRY_QUOTE",
     "MAX_ENTRY_QUOTE",
     "STOP_LOSS_PCT",
@@ -48,6 +49,10 @@ ALLOWED_ENV_KEYS = [
     "BINANCE_MAX_RETRIES",
     "BINANCE_RETRY_BACKOFF_SEC",
 ]
+BOOL_ENV_KEYS = {
+    "BINANCE_TESTNET",
+    "USE_FULL_BALANCE",
+}
 SENSITIVE_KEYS = {
     "BINANCE_API_KEY",
     "BINANCE_API_SECRET",
@@ -442,6 +447,10 @@ def settings():
     if request.method == "POST":
         updates: dict[str, str] = {}
         for key in ALLOWED_ENV_KEYS:
+            if key in BOOL_ENV_KEYS:
+                updates[key] = "true" if request.form.get(key) == "on" else "false"
+                continue
+
             submitted = request.form.get(key, "").strip()
             if key in SENSITIVE_KEYS and submitted == "":
                 updates[key] = env.get(key, "")
@@ -455,12 +464,17 @@ def settings():
 
     fields = []
     for key in ALLOWED_ENV_KEYS:
+        value = env.get(key, "")
+        is_bool = key in BOOL_ENV_KEYS
+        bool_checked = value.strip().lower() == "true" if is_bool else False
         fields.append(
             {
                 "key": key,
-                "value": "" if key in SENSITIVE_KEYS else env.get(key, ""),
+                "value": "" if key in SENSITIVE_KEYS else value,
                 "is_sensitive": key in SENSITIVE_KEYS,
-                "is_set": bool(env.get(key, "")),
+                "is_set": bool(value),
+                "is_bool": is_bool,
+                "bool_checked": bool_checked,
             }
         )
 
