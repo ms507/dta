@@ -296,8 +296,12 @@ class BinanceBroker(BaseBroker):
         quantity = self._round_quantity(quantity, step_size)
 
         if quantity <= 0 or (min_qty > 0 and quantity < min_qty):
+            reason = (
+                f"quantity {quantity:.8f} below minQty {min_qty:.8f}" if min_qty > 0
+                else f"quantity {quantity:.8f} is not tradable"
+            )
             logger.warning(f"Quantity too small for {symbol}: {quantity} — order skipped")
-            return Order(symbol=symbol, side=side, quantity=quantity, status="REJECTED")
+            return Order(symbol=symbol, side=side, quantity=quantity, status="REJECTED", reject_reason=reason)
 
         price = self.get_price(symbol)
         notional = quantity * price if price > 0 else 0.0
@@ -319,12 +323,22 @@ class BinanceBroker(BaseBroker):
                     quantity = required_qty
                     notional = required_notional
                 else:
+                    reason = (
+                        f"insufficient {quote_asset} balance for minNotional "
+                        f"(need {required_notional:.6f}, have {quote_balance:.6f})"
+                    )
                     logger.warning(
                         f"Notional too small for {symbol}: qty={quantity} value={notional:.6f} < "
                         f"minNotional={min_notional:.6f}. Required qty≈{required_qty:.8f}, "
                         f"but only {quote_balance:.6f} {quote_asset} available."
                     )
-                    return Order(symbol=symbol, side=side, quantity=quantity, status="REJECTED")
+                    return Order(
+                        symbol=symbol,
+                        side=side,
+                        quantity=quantity,
+                        status="REJECTED",
+                        reject_reason=reason,
+                    )
             else:
                 # For SELL orders: allow selling even if undersized by raising quantity to minNotional
                 if side.upper() == "SELL":
@@ -337,17 +351,36 @@ class BinanceBroker(BaseBroker):
                         quantity = required_qty
                         notional = required_qty * price
                     else:
+                        reason = (
+                            f"insufficient asset quantity for minNotional "
+                            f"(need {required_qty:.8f}, have {available_qty:.8f})"
+                        )
                         logger.warning(
                             f"Cannot adjust SELL for {symbol}: required={required_qty:.8f} > available={available_qty:.8f}. "
                             f"Notional {notional:.6f} < minNotional {min_notional:.6f} — order rejected."
                         )
-                        return Order(symbol=symbol, side=side, quantity=quantity, status="REJECTED")
+                        return Order(
+                            symbol=symbol,
+                            side=side,
+                            quantity=quantity,
+                            status="REJECTED",
+                            reject_reason=reason,
+                        )
                 else:
+                    reason = (
+                        f"notional {notional:.6f} below minNotional {min_notional:.6f}"
+                    )
                     logger.warning(
                         f"Notional too small for {symbol}: qty={quantity} value={notional:.6f} < "
                         f"minNotional={min_notional:.6f}. Required qty≈{required_qty:.8f}"
                     )
-                    return Order(symbol=symbol, side=side, quantity=quantity, status="REJECTED")
+                    return Order(
+                        symbol=symbol,
+                        side=side,
+                        quantity=quantity,
+                        status="REJECTED",
+                        reject_reason=reason,
+                    )
 
         quantity_str = self._format_quantity(quantity, step_size)
 
@@ -368,4 +401,10 @@ class BinanceBroker(BaseBroker):
             )
         except (BinanceAPIException, ReadTimeoutError, RequestException, TimeoutError) as exc:
             logger.error(f"place_market_order({symbol}, {side}, {quantity}) failed: {exc}")
-            return Order(symbol=symbol, side=side, quantity=quantity, status="FAILED")
+            return Order(
+                symbol=symbol,
+                side=side,
+                quantity=quantity,
+                status="FAILED",
+                reject_reason=str(exc),
+            )

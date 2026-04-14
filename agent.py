@@ -342,7 +342,10 @@ class TradingAgent:
                 ))
                 self._record_position_opened(symbol)
             else:
-                logger.warning(f"{symbol} | BUY signal not executed (order status={order.status})")
+                reason = f", reason={order.reject_reason}" if order.reject_reason else ""
+                logger.warning(
+                    f"{symbol} | BUY signal not executed (order status={order.status}{reason})"
+                )
 
         elif signal == Signal.SELL and self.portfolio.has(symbol):
             pos = self.portfolio.get(symbol)
@@ -376,7 +379,10 @@ class TradingAgent:
                 self.portfolio.close(symbol)
                 self._record_position_closed(symbol)
             else:
-                logger.warning(f"{symbol} | SELL signal not executed (order status={order.status})")
+                reason = f", reason={order.reject_reason}" if order.reject_reason else ""
+                logger.warning(
+                    f"{symbol} | SELL signal not executed (order status={order.status}{reason})"
+                )
         elif signal == Signal.SELL:
             logger.info(f"{symbol} | SELL signal but no open position")
         else:

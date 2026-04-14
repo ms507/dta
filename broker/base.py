@@ -13,6 +13,7 @@ class Order:
     price: Optional[float] = None
     order_id: Optional[str] = None
     status: str = "PENDING"
+    reject_reason: Optional[str] = None
 
 
 @dataclass
