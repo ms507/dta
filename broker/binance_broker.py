@@ -57,6 +57,10 @@ class BinanceBroker(BaseBroker):
         if testnet:
             self.client.API_URL = _TESTNET_URL
 
+        # Symbol filters (step size, minQty, minNotional) are static for a session,
+        # so cache them to avoid redundant get_symbol_info API calls every cycle.
+        self._symbol_info_cache: dict[str, dict] = {}
+
         # Ping can intermittently fail (e.g., proxy/gateway 502). Do not abort startup here.
         try:
             self._call_with_retries("ping", self.client.ping)
@@ -111,8 +115,14 @@ class BinanceBroker(BaseBroker):
     # ------------------------------------------------------------------
 
     def _get_symbol_info(self, symbol: str) -> dict | None:
+        cached = self._symbol_info_cache.get(symbol)
+        if cached is not None:
+            return cached
         try:
-            return self._call_with_retries("get_symbol_info", self.client.get_symbol_info, symbol)
+            info = self._call_with_retries("get_symbol_info", self.client.get_symbol_info, symbol)
+            if info:
+                self._symbol_info_cache[symbol] = info
+            return info
         except (BinanceAPIException, ReadTimeoutError, RequestException, TimeoutError) as exc:
             logger.error(f"get_symbol_info({symbol}) failed: {exc}")
             return None
@@ -265,6 +275,25 @@ class BinanceBroker(BaseBroker):
         except BinanceAPIException as exc:
             logger.error(f"get_min_notional({symbol}) failed: {exc}")
         return 0.0
+
+    def is_dust(self, symbol: str, quantity: float) -> bool:
+        """Return True if a holding is too small to ever be sold.
+
+        A spot holding below the LOT_SIZE minQty (after rounding to step size)
+        can never be submitted as a SELL order, because we cannot acquire more of
+        the asset we are trying to dispose of. Such positions must not be managed
+        as active trades, otherwise stop-loss checks loop forever.
+        """
+        if quantity <= 0:
+            return True
+        step_size = self.get_step_size(symbol)
+        min_qty = self.get_min_qty(symbol)
+        rounded = self._round_quantity(quantity, step_size)
+        if rounded <= 0:
+            return True
+        if min_qty > 0 and rounded < min_qty:
+            return True
+        return False
 
     def _round_quantity(self, quantity: float, step_size: float) -> float:
         """Floor quantity to the allowed precision."""

@@ -58,6 +58,7 @@ class TradingAgent:
         self._min_signal_exit_pnl_pct = max(0.0, float(self.config.min_signal_exit_pnl_pct))
         self._position_opened_at: dict[str, float] = {}
         self._last_exit_at: dict[str, float] = {}
+        self._dust_warned: set[str] = set()
 
     def _record_position_opened(self, symbol: str) -> None:
         self._position_opened_at[symbol] = time.time()
@@ -217,6 +218,21 @@ class TradingAgent:
                     self.portfolio.close(symbol)
                     self._record_position_closed(symbol)
                     logger.info(f"Removed {symbol} from portfolio because no exchange balance remains")
+                self._dust_warned.discard(symbol)
+                continue
+
+            if self.broker.is_dust(symbol, quantity):
+                # Untradable dust (below minQty): cannot be sold, so never manage it.
+                # Otherwise stop-loss checks would loop forever on a worthless remainder.
+                if existing is not None:
+                    self.portfolio.close(symbol)
+                    self._record_position_closed(symbol)
+                if symbol not in self._dust_warned:
+                    logger.warning(
+                        f"{symbol} | ignoring untradable dust holding (qty={quantity:.8f}) "
+                        f"— below exchange minQty, cannot be sold"
+                    )
+                    self._dust_warned.add(symbol)
                 continue
 
             current_price = self.broker.get_price(symbol)
@@ -259,6 +275,11 @@ class TradingAgent:
         for symbol in list(self.portfolio.positions):
             pos = self.portfolio.get(symbol)
             if pos is None:
+                continue
+            if self.broker.is_dust(symbol, pos.quantity):
+                # Defensive: drop untradable dust so SL/TP checks don't loop endlessly.
+                self.portfolio.close(symbol)
+                self._record_position_closed(symbol)
                 continue
             current_price = self.broker.get_price(symbol)
             reason = self.risk.exit_reason(pos, current_price)

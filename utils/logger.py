@@ -1,6 +1,7 @@
 import logging
 import sys
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from colorama import Fore, Style, init
 
 init(autoreset=True)
@@ -37,9 +38,14 @@ def get_logger(name: str) -> logging.Logger:
     ))
     logger.addHandler(ch)
 
-    # File handler — all levels
+    # File handler — all levels, with rotation to prevent unbounded disk growth.
     log_filename = f"trading_{datetime.now().strftime('%Y%m%d')}.log"
-    fh = logging.FileHandler(log_filename, encoding="utf-8")
+    fh = RotatingFileHandler(
+        log_filename,
+        maxBytes=10 * 1024 * 1024,  # 10 MB per file
+        backupCount=5,              # keep up to 5 rotated files (~60 MB total)
+        encoding="utf-8",
+    )
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(logging.Formatter(
         fmt="%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s",
