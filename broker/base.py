@@ -24,6 +24,7 @@ class Position:
     stop_loss: float
     take_profit: float
     side: str          # "LONG" or "SHORT"
+    highest_price: float = 0.0  # high-water mark since entry, used by the trailing stop
 
 
 class BaseBroker(ABC):

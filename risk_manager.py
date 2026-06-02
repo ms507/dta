@@ -77,6 +77,37 @@ class RiskManager:
         return entry * (1.0 - self.config.take_profit_pct)
 
     # ------------------------------------------------------------------
+    # Trailing stop
+    # ------------------------------------------------------------------
+
+    def update_trailing_stop(self, position: Position, current_price: float) -> None:
+        """Ratchet the stop-loss upward as price makes new highs (LONG only).
+
+        The stop only ever moves up and never above the current price, so once the
+        trade is in profit a pullback of trailing_stop_pct locks in the gain instead
+        of waiting for the far take-profit (which historically was never reached).
+        """
+        if self.config.trailing_stop_pct <= 0 or current_price <= 0:
+            return
+        if position.side != "LONG":
+            return
+
+        # Initialize the high-water mark on first observation.
+        if position.highest_price <= 0:
+            position.highest_price = max(position.entry_price, current_price)
+        elif current_price > position.highest_price:
+            position.highest_price = current_price
+
+        new_stop = position.highest_price * (1.0 - self.config.trailing_stop_pct)
+        if new_stop > position.stop_loss:
+            old_stop = position.stop_loss
+            position.stop_loss = new_stop
+            logger.info(
+                f"Trailing stop raised: {position.symbol} {old_stop:.4f} -> {new_stop:.4f} "
+                f"(high={position.highest_price:.4f})"
+            )
+
+    # ------------------------------------------------------------------
     # Exit check
     # ------------------------------------------------------------------
 

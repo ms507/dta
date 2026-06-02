@@ -282,6 +282,7 @@ class TradingAgent:
                 self._record_position_closed(symbol)
                 continue
             current_price = self.broker.get_price(symbol)
+            self.risk.update_trailing_stop(pos, current_price)
             reason = self.risk.exit_reason(pos, current_price)
             if reason:
                 order = self.broker.place_market_order(symbol, "SELL", pos.quantity)

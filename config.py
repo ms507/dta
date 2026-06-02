@@ -45,6 +45,7 @@ class RiskConfig:
     use_full_balance: bool = _env_bool("USE_FULL_BALANCE", False)
     stop_loss_pct: float = _env_float("STOP_LOSS_PCT", 0.025)
     take_profit_pct: float = _env_float("TAKE_PROFIT_PCT", 0.05)
+    trailing_stop_pct: float = _env_float("TRAILING_STOP_PCT", 0.0)
     max_daily_loss_pct: float = _env_float("MAX_DAILY_LOSS_PCT", 0.10)
     max_open_positions: int = _env_int("MAX_OPEN_POSITIONS", 5)
     min_entry_quote: float = _env_float("MIN_ENTRY_QUOTE", 10.0)
@@ -97,6 +98,8 @@ class Config:
             raise ValueError("MAX_POSITION_PCT must be > 0 and <= 1.0.")
         if self.risk.max_daily_loss_pct > 0.20:
             raise ValueError("MAX_DAILY_LOSS_PCT > 20% is too high. Please lower the risk.")
+        if self.risk.trailing_stop_pct < 0 or self.risk.trailing_stop_pct >= 1.0:
+            raise ValueError("TRAILING_STOP_PCT must be >= 0 and < 1.0 (0 disables it).")
         if self.risk.min_entry_quote < 0:
             raise ValueError("MIN_ENTRY_QUOTE must be >= 0.")
         if self.risk.max_entry_quote < 0:
