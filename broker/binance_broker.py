@@ -324,6 +324,21 @@ class BinanceBroker(BaseBroker):
         min_notional = self.get_min_notional(symbol)
         quantity = self._round_quantity(quantity, step_size)
 
+        # For SELL orders, never request more than the actually-held quantity. The recorded
+        # position size can drift above the real balance (trading fees deducted from the
+        # bought asset, partial fills, rounding), which otherwise triggers Binance error
+        # -2010 "insufficient balance" and traps losing positions that can never be closed.
+        if side.upper() == "SELL":
+            available_qty = self.get_asset_quantity(symbol)
+            if available_qty > 0 and quantity > available_qty:
+                clamped = self._round_quantity(available_qty, step_size)
+                if 0 < clamped < quantity:
+                    logger.info(
+                        f"Clamping SELL quantity for {symbol} to available balance: "
+                        f"{quantity:.8f} -> {clamped:.8f}"
+                    )
+                    quantity = clamped
+
         if quantity <= 0 or (min_qty > 0 and quantity < min_qty):
             reason = (
                 f"quantity {quantity:.8f} below minQty {min_qty:.8f}" if min_qty > 0

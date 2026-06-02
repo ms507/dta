@@ -388,9 +388,13 @@ class TradingAgent:
                 return
 
             pnl_pct = (current_price - pos.entry_price) / pos.entry_price if pos.entry_price > 0 else 0.0
-            if pnl_pct < self._min_signal_exit_pnl_pct:
+            # Only defer the exit while sitting on a small profit below the target — this
+            # avoids churning out of barely-profitable trades. Losing positions are allowed
+            # to exit on a SELL signal so the strategy can cut losses early instead of being
+            # trapped until the hard stop-loss triggers.
+            if 0.0 <= pnl_pct < self._min_signal_exit_pnl_pct:
                 logger.info(
-                    f"{symbol} | SELL blocked: minimum PnL not reached "
+                    f"{symbol} | SELL deferred: small profit below target "
                     f"({pnl_pct:.3%} < {self._min_signal_exit_pnl_pct:.3%})"
                 )
                 return
