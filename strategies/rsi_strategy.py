@@ -19,10 +19,17 @@ class RSIStrategy(BaseStrategy):
 
         rsi = ta.momentum.RSIIndicator(df["close"], window=self.period).rsi()
         curr = float(rsi.iloc[-1])
+        prev = float(rsi.iloc[-2])
 
-        # State-based: BUY wenn RSI in gesunder Bullzone, SELL wenn überkauft
-        if curr < self.overbought:
+        # Crossover-based: BUY wenn RSI aus der überverkauften Zone herauskommt,
+        # SELL wenn RSI aus der überkauften Zone herauskommt.
+        # Zwischen den Schwellen (30–70): HOLD — kein klares Signal.
+        if prev <= self.oversold and curr > self.oversold:
             return Signal.BUY
+        if curr <= self.oversold:
+            return Signal.BUY
+        if prev >= self.overbought and curr < self.overbought:
+            return Signal.SELL
         if curr >= self.overbought:
             return Signal.SELL
         return Signal.HOLD

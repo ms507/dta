@@ -19,9 +19,14 @@ class MomentumStrategy(BaseStrategy):
         roc = ta.momentum.ROCIndicator(df["close"], window=self.roc_period).roc()
         current_roc = float(roc.iloc[-1])
 
-        # State-based: positiver ROC = Aufwärtsmomentum
-        if current_roc > 0.2:
+        # Volumen-Bestätigung: Signal nur wenn aktuelles Volumen überdurchschnittlich ist.
+        # Ohne Volumen-Filter feuert ROC > 0.2 zu häufig und liefert Rauschen.
+        avg_volume = float(df["volume"].iloc[-20:].mean())
+        current_volume = float(df["volume"].iloc[-1])
+        volume_confirmed = avg_volume > 0 and current_volume >= avg_volume * self.volume_factor
+
+        if current_roc > 0.5 and volume_confirmed:
             return Signal.BUY
-        if current_roc < -0.2:
+        if current_roc < -0.5 and volume_confirmed:
             return Signal.SELL
         return Signal.HOLD

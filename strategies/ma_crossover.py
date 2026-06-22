@@ -21,10 +21,17 @@ class MACrossoverStrategy(BaseStrategy):
 
         curr_fast = float(fast_ema.iloc[-1])
         curr_slow = float(slow_ema.iloc[-1])
+        prev_fast = float(fast_ema.iloc[-2])
+        prev_slow = float(slow_ema.iloc[-2])
 
-        # State-based: schnelle EMA über langsamer = bullish
-        if curr_fast > curr_slow:
+        # Crossover-based mit Mindestabstand (0.05%) um False-Signals im Seitwärtsmarkt
+        # zu vermeiden. BUY nur bei echtem Kreuz nach oben, SELL bei Kreuz nach unten.
+        min_gap = curr_slow * 0.0005
+        crossed_up = prev_fast <= prev_slow and curr_fast > curr_slow + min_gap
+        crossed_down = prev_fast >= prev_slow and curr_fast < curr_slow - min_gap
+
+        if crossed_up:
             return Signal.BUY
-        if curr_fast < curr_slow:
+        if crossed_down:
             return Signal.SELL
         return Signal.HOLD
