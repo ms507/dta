@@ -16,7 +16,7 @@ class AIDecisionStrategy(BaseStrategy):
     combined confidence is strong enough.
     """
 
-    def __init__(self, buy_threshold: float = 0.10, sell_threshold: float = -0.10) -> None:
+    def __init__(self, buy_threshold: float = 0.0, sell_threshold: float = -0.15) -> None:
         super().__init__("AI_Decision", vote_weight=2.0)
         self.buy_threshold = buy_threshold
         self.sell_threshold = sell_threshold
@@ -54,21 +54,23 @@ class AIDecisionStrategy(BaseStrategy):
         current_volume = float(volume.iloc[-1])
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
 
-        # RSI: 30-65 bullish zone (positiv), >70 overbought (negativ)
+        # RSI: Score ist neutral (0) zwischen 40-60, bullish <40, bearish >60.
+        # Diese Bandbreite schließt den 30-70 Extremzone ein, aber mit gemäßigterem Scoring.
         if rsi < 30:
-            rsi_score = 0.8
-        elif rsi < 50:
-            rsi_score = 0.3
-        elif rsi < 65:
-            rsi_score = 0.2
-        elif rsi < 75:
-            rsi_score = -0.4
+            rsi_score = 0.6    # Überverkauft: starker Rebound-Druck
+        elif rsi < 40:
+            rsi_score = 0.3    # Schwach bullish
+        elif rsi < 60:
+            rsi_score = 0.0    # Neutral
+        elif rsi < 70:
+            rsi_score = -0.3   # Schwach bearish
         else:
-            rsi_score = -0.9
+            rsi_score = -0.6   # Überkauft: starker Pullback-Druck
 
         macd_score = _clip((macd_hist / price) * 5000.0)
         ema_score = _clip(((ema_fast - ema_slow) / price) * 400.0)
-        trend_score = _clip(((price - sma_trend) / price) * 250.0)
+        # Trend-Score mit reduzierter Gewichtung (250 → 100) damit nicht ein Indikator dominiert.
+        trend_score = _clip(((price - sma_trend) / price) * 100.0)
 
         band_width = max(upper_band - lower_band, price * 0.001)
         bollinger_score = _clip((middle_band - price) / band_width * 2.0)
@@ -76,13 +78,14 @@ class AIDecisionStrategy(BaseStrategy):
         # Momentum ohne Volumen-Pflicht
         momentum_score = _clip(roc / 2.0)
 
+        # Gewichte angepasst: RSI + Trend kleiner, MACD + EMA größer
         score = (
-            0.25 * macd_score
-            + 0.22 * ema_score
-            + 0.18 * trend_score
-            + 0.15 * rsi_score
-            + 0.08 * bollinger_score
-            + 0.12 * momentum_score
+            0.30 * macd_score      # Trend-Indikator: erhöht
+            + 0.25 * ema_score     # Gleitende Durchschnitte
+            + 0.12 * trend_score   # Trend-Preis (vorher 0.18, jetzt weniger Gewichtung)
+            + 0.15 * rsi_score     # RSI
+            + 0.10 * bollinger_score
+            + 0.08 * momentum_score
         )
 
         self._last_score = round(score, 4)
