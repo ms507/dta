@@ -154,10 +154,14 @@ class TradingAgent:
         if pd.isna(ema_fast) or pd.isna(ema_slow) or pd.isna(sma50):
             return False, "trend_nan"
 
-        # More lenient: allow trades when price is near SMA50 or above
-        if sma200 > 0 and price < sma200 * 0.95:
+        # Strict uptrend confirmation: only buy when the market is clearly rising.
+        # Buying weakness/downtrends was the primary source of stop-loss losses
+        # (72 stop-losses vs 5 take-profits in the live log).
+        if sma200 > 0 and price < sma200:
             return False, "price_below_sma200"
-        if ema_fast <= ema_slow * 0.99:  # Allow small deviation
+        if price < sma50:
+            return False, "price_below_sma50"
+        if ema_fast <= ema_slow:
             return False, "ema9_below_ema21"
         return True, "ok"
 
